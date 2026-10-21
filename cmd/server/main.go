@@ -23,13 +23,22 @@ func main() {
 	}
 	defer conn.Close()
 
-	ch, err := conn.Channel()
+	connCh, err := conn.Channel()
 	if err != nil {
 		log.Fatal(err)
 		os.Exit(1)
 	}
+	defer connCh.Close()
 
 	fmt.Println("Connection to RabbitMQ server successful")
+
+	// Queue/exchange bindings
+	logsCh, _, err := pubsub.DeclareAndBind(conn, routing.ExchangePerilTopic, routing.GameLogSlug, "game_logs.*", pubsub.Durable)
+	if err != nil {
+		log.Fatal(err)
+		os.Exit(1)
+	}
+	defer logsCh.Close()
 
 	gamelogic.PrintServerHelp()
 
@@ -46,17 +55,16 @@ repl:
 			payload := routing.PlayingState{
 				IsPaused: true,
 			}
-			pubsub.PublishJSON(ch, routing.ExchangePerilDirect, routing.PauseKey, payload)
+			pubsub.PublishJSON(connCh, routing.ExchangePerilDirect, routing.PauseKey, payload)
 
 		case "resume":
 			fmt.Println("Sending resume")
 			payload := routing.PlayingState{
 				IsPaused: false,
 			}
-			pubsub.PublishJSON(ch, routing.ExchangePerilDirect, routing.PauseKey, payload)
+			pubsub.PublishJSON(connCh, routing.ExchangePerilDirect, routing.PauseKey, payload)
 
 		case "quit":
-			fmt.Println("Quitting")
 			break repl
 
 		default:
