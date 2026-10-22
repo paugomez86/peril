@@ -22,6 +22,11 @@ func main() {
 		os.Exit(1)
 	}
 	defer conn.Close()
+	connCh, err := conn.Channel()
+	if err != nil {
+		log.Fatal(err)
+		os.Exit(1)
+	}
 	fmt.Println("Connection to RabbitMQ server successful")
 
 	username, err := gamelogic.ClientWelcome()
@@ -30,18 +35,24 @@ func main() {
 		os.Exit(1)
 	}
 
-	_, _, err = pubsub.DeclareAndBind(conn, routing.ExchangePerilDirect, fmt.Sprintf("%s.%s", routing.PauseKey, username), routing.PauseKey, pubsub.Transient)
+	gs := gamelogic.NewGameState(username)
+
+	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilDirect, fmt.Sprintf("pause.%s", username), routing.PauseKey, pubsub.Transient, HandlerPause(gs))
+	if err != nil {
+		log.Fatal(err)
+		os.Exit(1)
+	}
+	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilTopic, fmt.Sprintf("army_moves.%s", username), "army_moves.*", pubsub.Transient, HandlerMove(gs))
 	if err != nil {
 		log.Fatal(err)
 		os.Exit(1)
 	}
 
-	gs := gamelogic.NewGameState(username)
-
 repl:
 	for {
 		input := gamelogic.GetInput()
 		switch input[0] {
+		// Calling gamelogic spawn function
 		case "spawn":
 			err := gs.CommandSpawn(input)
 			if err != nil {
@@ -49,7 +60,13 @@ repl:
 			}
 
 		case "move":
-			_, err := gs.CommandMove(input)
+			// Calling gamelogic move function
+			mv, err := gs.CommandMove(input)
+			if err != nil {
+				fmt.Println(err)
+			}
+			// Publishing message with army_moves.username key
+			err = pubsub.PublishJSON(connCh, routing.ExchangePerilTopic, fmt.Sprintf("army_moves.%s", username), mv)
 			if err != nil {
 				fmt.Println(err)
 			}
