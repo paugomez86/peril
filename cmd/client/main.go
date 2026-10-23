@@ -37,13 +37,16 @@ func main() {
 
 	gs := gamelogic.NewGameState(username)
 
-	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilDirect, fmt.Sprintf("pause.%s", username), routing.PauseKey, pubsub.Transient, HandlerPause(gs))
-	if err != nil {
+	// Registering handler functions for each subscription
+	if err := pubsub.SubscribeJSON(conn, routing.ExchangePerilDirect, fmt.Sprintf("%s.%s", routing.PauseKey, username), routing.PauseKey, pubsub.DirectExchange, pubsub.TransientQueue, HandlerPause(gs)); err != nil {
 		log.Fatal(err)
 		os.Exit(1)
 	}
-	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilTopic, fmt.Sprintf("army_moves.%s", username), "army_moves.*", pubsub.Transient, HandlerMove(gs))
-	if err != nil {
+	if err := pubsub.SubscribeJSON(conn, routing.ExchangePerilTopic, fmt.Sprintf("%s.%s", routing.ArmyMovesPrefix, username), fmt.Sprintf("%s.*", routing.ArmyMovesPrefix), pubsub.TopicExchange, pubsub.TransientQueue, HandlerMove(gs, connCh)); err != nil {
+		log.Fatal(err)
+		os.Exit(1)
+	}
+	if err := pubsub.SubscribeJSON(conn, routing.ExchangePerilTopic, fmt.Sprintf("%s", routing.WarRecognitionsPrefix), fmt.Sprintf("%s.*", routing.WarRecognitionsPrefix), pubsub.TopicExchange, pubsub.DurableQueue, HandlerWar(gs)); err != nil {
 		log.Fatal(err)
 		os.Exit(1)
 	}

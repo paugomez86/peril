@@ -33,13 +33,18 @@ func main() {
 	fmt.Println("Connection to RabbitMQ server successful")
 
 	// Queue/exchange bindings
-	logsCh, _, err := pubsub.DeclareAndBind(conn, routing.ExchangePerilTopic, routing.GameLogSlug, "game_logs.*", pubsub.Durable)
+	_, _, err = pubsub.DeclareAndBind(conn, routing.ExchangePerilTopic, routing.GameLogSlug, "game_logs.*", pubsub.TopicExchange, pubsub.DurableQueue)
 	if err != nil {
 		log.Fatal(err)
 		os.Exit(1)
 	}
-	defer logsCh.Close()
+	_, _, err = pubsub.DeclareAndBind(conn, routing.ExchangeDeadLetter, routing.QueueDeadLetter, "", pubsub.FanoutExchange, pubsub.DurableQueue)
+	if err != nil {
+		log.Fatal(err)
+		os.Exit(1)
+	}
 
+	// TODO: Test
 	gamelogic.PrintServerHelp()
 
 repl:
@@ -71,10 +76,6 @@ repl:
 			fmt.Println("Invalid command")
 		}
 	}
-
-	/* signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-	<-signalChan */
 
 	fmt.Println("\nShutting down...")
 	conn.Close()
